@@ -6,8 +6,7 @@ demostrar competencias de nivel senior en un contexto financiero. No es un CRUD:
 modela autorización, captura, rechazo, reembolso parcial/total, idempotencia,
 concurrencia optimista y publicación confiable de eventos.
 
-> Proyecto de portafolio de Víctor Yordi Díaz González. No procesa tarjetas reales
-> ni está afiliado a Culqi o BCP.
+> Proyecto de portafolio de Víctor Yordi Díaz González. No procesa tarjetas reales.
 
 ## Qué demuestra
 
