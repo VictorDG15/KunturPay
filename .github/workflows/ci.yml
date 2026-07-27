@@ -2,9 +2,9 @@ name: KunturPay CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop]
   pull_request:
-    branches: [main, develop]
+    branches: [develop]
 
 permissions:
   contents: read
@@ -47,7 +47,7 @@ jobs:
         run: docker build -t kunturpay-event-platform:${{ github.sha }} .
 
       - name: Sonar analysis
-        if: github.ref == 'refs/heads/main' && env.SONAR_TOKEN != ''
+        if: github.ref == 'refs/heads/develop' && env.SONAR_TOKEN != ''
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
