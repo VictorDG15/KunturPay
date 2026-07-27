@@ -1,0 +1,10 @@
+target/
+.m2-cache/
+.idea/
+.vscode/
+*.iml
+.DS_Store
+.env
+*.log
+coverage/
+dependency-check-report.*

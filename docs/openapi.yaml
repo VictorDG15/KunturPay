@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: KunturPay Payments API
+  version: 1.0.0
+  description: API idempotente de autorización, captura y reembolso de pagos.
+servers:
+  - url: http://localhost:8080
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Payments
+paths:
+  /api/v1/payments:
+    post:
+      tags: [Payments]
+      summary: Autoriza un pago
+      operationId: createPayment
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "201":
+          description: Pago autorizado o rechazado por el adquirente
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Payments]
+      summary: Lista pagos por comercio
+      operationId: listPayments
+      parameters:
+        - name: merchantId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Página de pagos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentPageEnvelope"
+  /api/v1/payments/{paymentId}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    get:
+      tags: [Payments]
+      summary: Obtiene un pago por UUID
+      operationId: getPayment
+      responses:
+        "200":
+          description: Pago encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/payments/{paymentId}/capture:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      tags: [Payments]
+      summary: Captura un pago autorizado
+      operationId: capturePayment
+      responses:
+        "200":
+          description: Pago capturado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentEnvelope"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/InvalidState"
+  /api/v1/payments/{paymentId}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/PaymentId"
+    post:
+      tags: [Payments]
+      summary: Reembolsa parcial o totalmente un pago capturado
+      operationId: refundPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundPaymentRequest"
+      responses:
+        "201":
+          description: Reembolso aplicado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/InvalidState"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Llave única por intención de pago.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreatePaymentRequest:
+      type: object
+      required: [merchantId, orderId, amount, currency, paymentToken]
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          maxLength: 80
+          example: ORDER-1001
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 150.00
+        currency:
+          $ref: "#/components/schemas/Currency"
+        paymentToken:
+          type: string
+          pattern: "^tok_[A-Za-z0-9_-]{6,}$"
+          example: tok_test_visa_4242
+        description:
+          type: string
+          maxLength: 200
+    RefundPaymentRequest:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+        currency:
+          $ref: "#/components/schemas/Currency"
+    Currency:
+      type: string
+      enum: [PEN, USD]
+    PaymentStatus:
+      type: string
+      enum:
+        - PENDING
+        - AUTHORIZED
+        - CAPTURED
+        - DECLINED
+        - PARTIALLY_REFUNDED
+        - REFUNDED
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        amount:
+          type: number
+        currency:
+          $ref: "#/components/schemas/Currency"
+        status:
+          $ref: "#/components/schemas/PaymentStatus"
+        tokenReference:
+          type: string
+          example: "****4242"
+        description:
+          type: string
+          nullable: true
+        authorizationCode:
+          type: string
+          nullable: true
+        declineReason:
+          type: string
+          nullable: true
+        refundedAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Meta:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+    PaymentEnvelope:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Payment"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    PaymentPageEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/Payment"
+            page:
+              type: integer
+            size:
+              type: integer
+            totalElements:
+              type: integer
+              format: int64
+            totalPages:
+              type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ApiError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: string
+        message:
+          type: string
+        status:
+          type: integer
+        path:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+  responses:
+    BadRequest:
+      description: Petición inválida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthorized:
+      description: API key ausente o inválida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: Pago no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Conflict:
+      description: Conflicto de idempotencia o concurrencia
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    InvalidState:
+      description: Transición de estado no permitida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"

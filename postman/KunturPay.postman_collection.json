@@ -1,0 +1,204 @@
+{
+  "info": {
+    "_postman_id": "2ca4ec85-fec5-45e5-86be-c5c1e8aa6db2",
+    "name": "KunturPay Event Platform",
+    "description": "Flujo de autorización, replay idempotente, captura y reembolso.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "apiKey",
+      "value": "local-secret-key-change-me"
+    },
+    {
+      "key": "merchantId",
+      "value": "8a736e75-4e2b-43d0-a132-fb88dace28cf"
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create authorized payment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('paymentId', body.data.id);",
+              "pm.test('Authorized', () => pm.expect(body.data.status).to.eql('AUTHORIZED'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "paycore-order-1001"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"merchantId\": \"{{merchantId}}\",\n  \"orderId\": \"ORDER-1001\",\n  \"amount\": 150.00,\n  \"currency\": \"PEN\",\n  \"paymentToken\": \"tok_test_visa_4242\",\n  \"description\": \"Compra de prueba\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/payments"
+      }
+    },
+    {
+      "name": "2. Replay same idempotent request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Same payment returned', () => {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('paymentId'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "paycore-order-1001"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"merchantId\": \"{{merchantId}}\",\n  \"orderId\": \"ORDER-1001\",\n  \"amount\": 150.00,\n  \"currency\": \"PEN\",\n  \"paymentToken\": \"tok_test_visa_4242\",\n  \"description\": \"Compra de prueba\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/payments"
+      }
+    },
+    {
+      "name": "3. Get payment",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}"
+      }
+    },
+    {
+      "name": "4. Capture payment",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Captured', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().data.status).to.eql('CAPTURED');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}/capture"
+      }
+    },
+    {
+      "name": "5. Partial refund",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Partially refunded', () => {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(pm.response.json().data.status).to.eql('PARTIALLY_REFUNDED');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 50.00,\n  \"currency\": \"PEN\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/payments/{{paymentId}}/refunds"
+      }
+    },
+    {
+      "name": "6. List merchant payments",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/payments?merchantId={{merchantId}}&page=0&size=20"
+      }
+    },
+    {
+      "name": "7. Create declined payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "declined-{{$guid}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"merchantId\": \"{{merchantId}}\",\n  \"orderId\": \"ORDER-{{$timestamp}}\",\n  \"amount\": 25.90,\n  \"currency\": \"PEN\",\n  \"paymentToken\": \"tok_test_visa_0000\",\n  \"description\": \"Escenario de rechazo\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/payments"
+      }
+    }
+  ]
+}
